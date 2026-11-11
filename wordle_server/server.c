@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
 	int port = DEFAULT_PORT;
 
 	if (argc == 2) {
-		port = atoi(argv[1]) // if a user inputs a port it chnges from 7000 to whatever port they input
+		port = atoi(argv[1]); // if a user inputs a port it chnges from 7000 to whatever port they input
 	} // end if
 
 	int server_fd = socket(AF_INET, SOCK_STREAM, 0);  // create socket over ipv4 nd tcp
