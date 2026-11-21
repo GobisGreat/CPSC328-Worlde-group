@@ -11,7 +11,7 @@
 #define CMD_HELLO   2
 #define CMD_READY   3
 #define MSG_BUSY    "BUSY\n"
-#define MAX_PLAYERS 5
+#define MAX_PLAYERS 10
 
 
 #define MSG_HELLO   "HELLO\n"
