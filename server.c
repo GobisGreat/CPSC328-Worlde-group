@@ -157,25 +157,25 @@ static void score_guess(const char *secret, const char *guess, char *fb)
 //return value: None
 
 
-static void play_game(int client_fd)
+static void play_game(int client_fd, int slot)
 {
 	const char *secret = bank[rand() % bank_count];
 	char buf[MAX_MESSAGE];
 	char fb[WORD_BUF + 1];
 	int attempts = 0;
 
-	printf("Secret word: %s\n", secret);   // debug: remove before turning in
+	printf("(Slot %d) Secret word: %s\n", slot, secret);   // debug: remove before turning in
 
 	while (attempts < MAX_GUESSES) {
 		int n = receive_message(client_fd, buf, sizeof(buf));
 		if (n <= 0) {
-			printf("Client disconnected.\n");
+			printf("(Slot %d) Client disconnected.\n", slot);
 			return;
 		} // end if
 		strip_newline(buf);
 
 		if (command_type(buf) == CMD_QUIT) {
-			printf("Client quit.\n");
+			printf("(Slot %d) Client quit.\n", slot);
 			return;
 		} // end if
 
@@ -195,12 +195,12 @@ static void play_game(int client_fd)
 			return;
 
 		if (strncmp(fb, "GGGGG", WORD_LEN) == 0) {
-			printf("Client won in %d guesses.\n", attempts);
+			printf("(Slot %d) Client won in %d guesses.\n", slot, attempts);
 			return;
 		} // end if
 	} // end while
 
-	printf("Client ran out of guesses.\n");
+	printf("(Slot %d) Client ran out of guesses.\n", slot);
 } // end play_game
 
 //Function name: make_listener
@@ -263,12 +263,12 @@ static void handle_client(int client_fd)
      int cmd = command_type(buf);
 
      if (cmd == CMD_READY) {
-        play_game(client_fd);
+        play_game(client_fd, slot);
      } else if (cmd == CMD_QUIT) {
-           printf("Client quit.\n");
+           printf("(Slot %d) Client quit.\n", slot);
            break;
      } else {
-           printf("Unknown command from client.\n");
+           printf("(Slot %d) Unknown command from client.\n", slot);
            break;
      }//end if
   } //end while
