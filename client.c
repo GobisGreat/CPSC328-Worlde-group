@@ -1,65 +1,144 @@
-
+/* Wordle TCP client.
+ * Class examples used for the basic style:
+ *   school/tcpcliserv/tcpcli.c: socket(), connect(), and error checks.
+ *   school/qotd_RDoan.c: gethostbyname(), memcpy(), and server address setup.
+ *   school/threads_RDoan.c: digit checks before atoi() and explicit flag checks.
+ * The Wordle board and message protocol are specific to this project.
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <strings.h>     // strcasecmp
 #include <ctype.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <errno.h>
+#include <netdb.h>
 #include <sys/time.h>
 
 #include "wordleLib.h"
 
 #define SIZE sizeof(struct sockaddr_in)
-#define DEFAULT_PORT 33651
+#define DEFAULT_PORT 44389 // used when no port argument is given
 
+// Higher numbers mean stronger evidence about a letter.
+#define UNUSED 0
+#define ABSENT 1
+#define MISPLACED 2
+#define CORRECT 3
 
+// ANSI escape codes change the color of text printed in the terminal.
+void set_color(char feedback)
+{
+  if (feedback == 'G')
+    printf("\033[42;30m");       // green background, black text
+  else if (feedback == 'Y')
+    printf("\033[43;30m");       // yellow background, black text
+  else
+    printf("\033[100;97m");      // gray background, white text
+}
 
+void show_letter_row(int letters[], int row)
+{
+  // Fixed alphabet positions: A-H, I-P, Q-X, then Y-Z.
+  int first = row * 8;
+  int end = first + 8;
+  if (end > 26)
+    end = 26;
 
-// print a guess as colored tiles based on the server's G/Y/X feedback
-static void show_result(const char *guess, const char *fb)
+  for (int i = first; i < end; i++)
+    {
+      if (letters[i] == CORRECT)
+        set_color('G');
+      else if (letters[i] == MISPLACED)
+        set_color('Y');
+      else if (letters[i] == ABSENT)
+        set_color('X');
+
+      printf("[ %c ] ", 'A' + i);
+      printf("\033[0m");        // return to normal terminal colors
+    }
+}
+
+void show_board(char guesses[][WORD_BUF], char feedback[][WORD_BUF],
+                int letters[], int attempts)
+{
+  // Print a fresh board below the previous one, keeping the game history.
+  printf("\nWordle Game - %d/%d attempts used, %d remaining\n",
+         attempts, MAX_GUESSES, MAX_GUESSES - attempts);
+  printf("Enter five letters, or 'quit' to exit.\n\n");
+  printf("BOARD                             LETTER BANK\n");
+  for (int row = 0; row < MAX_GUESSES; row++)
+    {
+      for (int col = 0; col < WORD_LEN; col++)
+        {
+          if (row < attempts)
+            {
+              set_color(feedback[row][col]);
+              printf("[ %c ]", toupper((unsigned char)guesses[row][col]));
+              printf("\033[0m ");
+            }
+          else
+            printf("[   ] ");
+        }
+      printf("    ");
+      if (row < 4)
+        show_letter_row(letters, row);
+      printf("\n");
+    }
+}
+
+void update_letters(int letters[], char guess[], char feedback[])
 {
   for (int i = 0; i < WORD_LEN; i++)
     {
-      const char *color = (fb[i] == 'G') ? "\033[42;30m"     // green
-                        : (fb[i] == 'Y') ? "\033[43;30m"     // yellow
-                        :                  "\033[100;97m";   // gray
-      printf("%s %c \033[0m", color, toupper((unsigned char)guess[i]));
+      // Guesses are already lowercase: a becomes index 0, b becomes 1, etc.
+      int letter = guess[i] - 'a';
+      int status;
+
+      if (feedback[i] == 'G')
+        status = CORRECT;
+      else if (feedback[i] == 'Y')
+        status = MISPLACED;
+      else
+        status = ABSENT;
+
+      // A repeated letter's gray tile must not replace its green/yellow tile.
+      if (letter >= 0 && letter < 26 && status > letters[letter])
+        letters[letter] = status;
     }
-  printf("\n");
 }
 
 // feedback must be exactly WORD_LEN chars of G / Y / X
-static int valid_feedback(const char *fb)
+int valid_feedback(const char feedback[])
 {
-  if (strlen(fb) != WORD_LEN)
+  if (strlen(feedback) != WORD_LEN)
     return 0;
   for (int i = 0; i < WORD_LEN; i++)
-    if (fb[i] != 'G' && fb[i] != 'Y' && fb[i] != 'X')
+    if (feedback[i] != 'G' && feedback[i] != 'Y' && feedback[i] != 'X')
       return 0;
   return 1;
 }
 
 // returns 1 = win, 0 = loss, -1 = error / quit
-static int play_wordle(int sockfd)
+int play_wordle(int sockfd)
 {
   char input[MAX_MESSAGE];
   char reply[MAX_MESSAGE];
   char guess[WORD_BUF];
+  char message[WORD_LEN + 2]; // five letters, newline, and string terminator
+  int count;
+  char guesses[MAX_GUESSES][WORD_BUF] = {0};
+  char feedback[MAX_GUESSES][WORD_BUF] = {0};
+  int letters[26] = {0};
   int attempts = 0;
-
-  printf("Guess the %d-letter word. You have %d tries. Type 'quit' to exit.\n",
-         WORD_LEN, MAX_GUESSES);
+  show_board(guesses, feedback, letters, attempts);
 
   while (attempts < MAX_GUESSES)
     {
       printf("Guess %d/%d: ", attempts + 1, MAX_GUESSES);
-      fflush(stdout);
+      fflush(stdout); // show the prompt before waiting for keyboard input
 
       if (fgets(input, sizeof(input), stdin) == NULL)
         {
@@ -70,34 +149,44 @@ static int play_wordle(int sockfd)
       // discard leftover input if the line was longer than the buffer
       if (strchr(input, '\n') == NULL)
         {
-          int c;
-          while ((c = getchar()) != '\n' && c != EOF)
-            ;
+          int c = getchar();
+          while (c != '\n' && c != EOF)
+            {
+              c = getchar();
+            }
         }
       strip_newline(input);
 
-      if (strcasecmp(input, "quit") == 0)
+      // Check each character and change uppercase letters to lowercase.
+      for (int i = 0; input[i] != '\0'; i++)
+        {
+          if (input[i] >= 'A' && input[i] <= 'Z')
+            input[i] = input[i] - 'A' + 'a';
+          // Other characters stay the same, so no else is needed.
+        }
+      if (strcmp(input, "quit") == 0)
         {
           send_message(sockfd, MSG_QUIT);
           return -1;
         }
 
-      if (!validate_word(input))
+      if (validate_word(input) == 0)
         {
           printf("Enter exactly %d letters (a-z).\n", WORD_LEN);
           continue;
         }
 
-      normalize_word(input);
       strcpy(guess, input);
 
-      char outbuf[WORD_BUF + 1];
-      snprintf(outbuf, sizeof(outbuf), "%s\n", guess);
-      if (send_message(sockfd, outbuf) == -1)
+      // The word was checked above, so it has exactly five letters.
+      strcpy(message, guess);
+      message[WORD_LEN] = '\n';     // server reads until the newline
+      message[WORD_LEN + 1] = '\0'; // C strings end with this character
+      if (send_message(sockfd, message) == -1)
         return -1;
 
-      int n = receive_message(sockfd, reply, sizeof(reply));
-      if (n <= 0)
+      count = receive_message(sockfd, reply, sizeof(reply));
+      if (count <= 0)
         {
           fprintf(stderr, "Server closed the connection.\n");
           return -1;
@@ -110,14 +199,17 @@ static int play_wordle(int sockfd)
           continue;                 // doesn't use up an attempt
         }
 
-      if (!valid_feedback(reply))
+      if (valid_feedback(reply) == 0)
         {
           fprintf(stderr, "Unexpected server reply: %s\n", reply);
           return -1;
         }
 
+      strcpy(guesses[attempts], guess);
+      strcpy(feedback[attempts], reply);
       attempts++;
-      show_result(guess, reply);
+      update_letters(letters, guess, reply);
+      show_board(guesses, feedback, letters, attempts);
 
       if (strcmp(reply, "GGGGG") == 0)
         return 1;
@@ -126,120 +218,136 @@ static int play_wordle(int sockfd)
   return 0;
 }
 
-
-
-static int connect_to_server(const char *ip, int base_port)
+// Try each player port until a server sends a HELLO greeting.
+int connect_to_server(const char *hostname, int base_port)
 {
+  // Same hostname lookup and address copy used in qotd_RDoan.c.
+  struct hostent *host = gethostbyname(hostname);
+  if (host == NULL)
+    {
+      fprintf(stderr, "Unable to find server: %s\n", hostname);
+      return -1;
+    }
+
   for (int i = 0; i < MAX_PLAYERS; i++)
     {
-       int port = base_port + i;
-       if (port > 65535)
-	  break;
+      int port = base_port + i;
+      int sockfd;
+      int count;
+      char greeting[MAX_MESSAGE];
+      struct sockaddr_in server = {0};
+      struct timeval timeout = {5, 0};
 
-       struct sockaddr_in addr;
-       memset(&addr, 0, sizeof(addr));
-       addr.sin_family = AF_INET;
-       addr.sin_port = htons((unsigned short)port);
-       addr.sin_addr.s_addr = inet_addr(ip);
+      if (port > 65535)
+        break;
 
-       int fd = socket(AF_INET, SOCK_STREAM, 0);
-       if (fd == -1)
-	  {
-	    perror("Socket call failed");
-	    return -1;
-	  }
+      server.sin_family = AF_INET;
+      server.sin_port = htons(port); // convert port to network byte order
+      memcpy(&server.sin_addr, host->h_addr_list[0], sizeof(server.sin_addr));
 
-       struct timeval tv = {5, 0};
-       setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-       setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+      sockfd = socket(AF_INET, SOCK_STREAM, 0);
+      if (sockfd == -1)
+        {
+          perror("socket call failed");
+          return -1;
+        }
 
+      // timeval stores seconds and microseconds (5 seconds here).
+      // These socket options limit how long send/receive calls may wait.
+      setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+      setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-       printf("Trying port %d...\n", port);
-       if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
-	  {
-	    printf("   port %d: %s\n", port, strerror(errno));
-	    close_connection(fd);
-	    continue;
-	  }
+      printf("Trying port %d...\n", port);
+      if (connect(sockfd, (struct sockaddr *)&server, SIZE) == -1)
+        {
+          perror("connect call failed");
+          close_connection(sockfd);
+          continue;
+        }
 
-       char buf[MAX_MESSAGE];
-       if (receive_message(fd, buf, sizeof(buf)) <= 0)
-	  {
-	     printf("   port %d: no greeting\n", port);
-	     close_connection(fd);
-	     continue;
-	  }
+      count = receive_message(sockfd, greeting, sizeof(greeting));
+      if (count <= 0)
+        {
+          printf("   port %d: no greeting\n", port);
+          close_connection(sockfd);
+          continue;
+        }
 
-       strip_newline(buf);
+      strip_newline(greeting);
+      if (strcmp(greeting, "BUSY") == 0)
+        {
+          printf("   port %d: busy, trying next\n", port);
+          close_connection(sockfd);
+          continue;
+        }
 
-       if (strcmp(buf, "BUSY") == 0)
-	  {
-            printf("   port %d: busy, trying next\n", port);
-	    close_connection(fd);
-	    continue;
-          }
+      if (command_type(greeting) == CMD_HELLO)
+        {
+          // Zero turns the timeouts off for normal gameplay.
+          timeout.tv_sec = 0;
+          timeout.tv_usec = 0;
+          setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+          setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+          printf("Connected on port %d\n", port);
+          return sockfd;
+        }
 
-       if (command_type(buf) == CMD_HELLO)
-	 {
-            struct timeval none = {0, 0};
-	    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &none, sizeof(none));
-	    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &none, sizeof(none));
-	    printf("Connected on port %d\n", port);
-	    return fd;
-
-	 }
-
-       close_connection(fd);
-     }
-   return -1;
- }
+      close_connection(sockfd);
+    }
+  return -1;
+}
 
 int main(int argc, char *argv[])
 {
 
+  int sockfd;
+  int port = DEFAULT_PORT;
+  char answer[32];
+
   printf("Client machine started\n");
   fflush(stdout);
 
-  int sockfd;
-  long port = DEFAULT_PORT;
-  char answer[32];
-  struct sockaddr_in server = {0};
-
-  signal(SIGPIPE, SIG_IGN);   // send() returns -1 instead of killing the program
+  // If the server disconnects, let send_message report an error.
+  // Without this, writing to a closed socket can stop the entire client.
+  signal(SIGPIPE, SIG_IGN);
 
   if (argc < 2 || argc > 3)
     {
-      fprintf(stderr, "Usage: %s <IPv4-address> [port]\n", argv[0]);
-      return EXIT_FAILURE;
-    }
-
-  // convert and store the server's IP address
-  server.sin_addr.s_addr = inet_addr(argv[1]);
-  if (server.sin_addr.s_addr == INADDR_NONE)
-    {
-      fprintf(stderr, "Invalid IPv4 address: %s\n", argv[1]);
-      return EXIT_FAILURE;
+      fprintf(stderr, "Usage: %s <hostname> [port]\n", argv[0]);
+      return 1;
     }
 
   if (argc == 3)
     {
-      char *end;
-      errno = 0;
-      port = strtol(argv[2], &end, 10);
-      if (!isdigit((unsigned char)argv[2][0]) || *end != '\0' ||
-          errno == ERANGE || port < 1024 || port > 65535)
+      // Like threads_RDoan.c, check the digits before using atoi().
+      // Limit the length so the number fits in an int.
+      if (strlen(argv[2]) == 0 || strlen(argv[2]) > 5)
         {
           fprintf(stderr, "Port must be a number from 1024 to 65535.\n");
-          return EXIT_FAILURE;
+          return 1;
+        }
+      for (int i = 0; argv[2][i] != '\0'; i++)
+        {
+          if (argv[2][i] < '0' || argv[2][i] > '9')
+            {
+              fprintf(stderr, "Port must contain only digits.\n");
+              return 1;
+            }
+        }
+      port = atoi(argv[2]); // convert the checked digit string to an integer
+      if (port < 1024 || port > 65535)
+        {
+          fprintf(stderr, "Port must be a number from 1024 to 65535.\n");
+          return 1;
         }
     }
 
-  sockfd = connect_to_server(argv[1], (int)port);
+  sockfd = connect_to_server(argv[1], port);
   if (sockfd < 0)
      {
-       fprintf(stderr, "Could not connect to any server port (%ld-%ld).\n",
+       fprintf(stderr, "Could not connect to any server port (%d-%d).\n",
 	       port, port + MAX_PLAYERS - 1);
-       return EXIT_FAILURE;
+       return 1;
      }
 
   printf("Wordle Game\n");
@@ -250,7 +358,7 @@ int main(int argc, char *argv[])
     {
       send_message(sockfd, MSG_QUIT);
       close_connection(sockfd);
-      return EXIT_SUCCESS;
+      return 0;
     }
 
   if (answer[0] == 'n' || answer[0] == 'N')
@@ -258,7 +366,7 @@ int main(int argc, char *argv[])
       send_message(sockfd, MSG_QUIT);
       close_connection(sockfd);
       printf("Connection closed.\n");
-      return EXIT_SUCCESS;
+      return 0;
     }
 
   if (answer[0] == 'y' || answer[0] == 'Y')
@@ -294,7 +402,7 @@ int main(int argc, char *argv[])
               printf("Please enter y or n.\n");
             }
 
-          if (!again)
+          if (again == 0)
             {
               send_message(sockfd, MSG_QUIT);
               break;
@@ -304,5 +412,5 @@ int main(int argc, char *argv[])
 
   close_connection(sockfd);
   printf("Connection closed.\n");
-  return EXIT_SUCCESS;
+  return 0;
 }  // end main
