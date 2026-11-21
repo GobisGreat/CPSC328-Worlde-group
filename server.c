@@ -1,3 +1,15 @@
+//Authors: Gabe Segaline IT, Ryan Doan CS, Hunter Phillips CS
+//Professor: Walther
+//Filename: server.c
+//Programming language used: C
+//Course: CPSC328
+//Creation date: 11/10/26
+//Due date: 11/23/26
+//Project: Wordle group Project
+//Purpose: To demonstrate the understanding of creation of setting up a server with a persistent connection, allowing multiple users to connect at one time.
+
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,13 +25,21 @@
 #include <sys/wait.h>
 
 #include "wordleLib.h"
-
-#define DEFAULT_PORT 33651
+//default port assigned below
+#define DEFAULT_PORT 44651 
 #define DEFAULT_WORD_FILE "words.txt"
-#define MAX_WORDS 5000
+//The words list is 14,855 words long for the 5 letters A-Z
+#define MAX_WORDS 14855
 
 static char bank[MAX_WORDS][WORD_BUF];
 static int  bank_count = 0;
+
+
+//Function name: cmp_words
+//Description: This function compares the word that us guessed and the actual word that is given to the client.
+//Parameters: a pointer for first word being compared, then b pointer for secind word being compared.
+//return values: Returns negative number if a comes before b, 0 if the words are equal, and positive if a comes after b
+
 
 static int cmp_words(const void *a, const void *b)
 {
@@ -27,9 +47,16 @@ static int cmp_words(const void *a, const void *b)
 } // end cmp_words
 
 
+//Function name: word_in_bank
+//Description: This function checks whether the guess is a real word
+//and is done by performing a binary search in the word bank.
+//Parameters: word, word_bank, and word_count
+//return value: returns 1 if word is in the bank and 0 if the word is not.
+
+
 
 int word_in_bank(const char *word, char word_bank[][6], int word_count){
-	// im gonna use a binary search for this cuz the list is like 3 thousand or so long
+	// im gonna use a binary search for this cuz the list is like 14 thousand or so long
 	int low = 0;
 	int high = word_count - 1;
 
@@ -55,7 +82,11 @@ int word_in_bank(const char *word, char word_bank[][6], int word_count){
 
 
 
-
+//Function name: load_words
+//Description: This function reads 5 letter words from the file into the word bank, skipping any blank lines
+//which then sorts the bank so that the word_in_bank function works with the binary search.
+//Parameters: path
+//return values: 0 on success, -1 if the file cannot open
 
 // load 5-letter words from a file, then sort so word_in_bank's binary search works
 static int load_words(const char *path)
@@ -85,6 +116,14 @@ static int load_words(const char *path)
 	return 0;
 } // end load_words
 
+
+//Function name:score_guess
+//Description: Compares guess to secret word and builds worlde feedback string
+//Parameters: secret - the hidden word
+//return value: None
+
+
+
 // fb gets WORD_LEN chars of G / Y / X, null-terminated
 static void score_guess(const char *secret, const char *guess, char *fb)
 {
@@ -110,6 +149,13 @@ static void score_guess(const char *secret, const char *guess, char *fb)
 
 	fb[WORD_LEN] = '\0';
 } // end score_guess
+
+
+//Function name: play_game
+//Description: runs the full wordle game with the client, picks random word, loops if the client wants to play again
+//Parameters: client_fd - socket connected to client
+//return value: None
+
 
 static void play_game(int client_fd)
 {
@@ -157,6 +203,13 @@ static void play_game(int client_fd)
 	printf("Client ran out of guesses.\n");
 } // end play_game
 
+//Function name: make_listener
+//Description: This creates a TCP socket, binds,  and listens. (The accept call is later down in main)
+//Note: setsockopt is used here because we kept having issues with ports already in use so this allows us to reuse those ports.
+//Parameters: port
+//returns -1 if any errors are present socket creation and with binding and listening. Returns the sockets file descriptor otherwise
+
+
 
 static int make_listener(int port)
 {
@@ -168,8 +221,8 @@ static int make_listener(int port)
 
   int opt = 1;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)); //This setsockopt allows us to set the options for the socket
-							       //we can reuse this port if the server restarts so that we dont
-							       //get a binding error to that specific port
+							      								 //we can reuse this port if the server restarts so that we dont
+							      								 //get a binding error to that specific port
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
@@ -193,7 +246,10 @@ static int make_listener(int port)
   return fd;
 }
 
-
+//Function name: handle_client
+//Description: this function allows to be ran in the forked child process, so that one client connection is its own entity and can run with atomicity.
+//Parameters: client_fd
+//return values: none
 
 static void handle_client(int client_fd)
 {
@@ -218,6 +274,12 @@ static void handle_client(int client_fd)
   } //end while
 
 } //end handle client
+
+//function name:
+//description: This function, main, starts the whole server and promotes a persistent connection
+//Parameters: argc, argv
+//return values: 0 on normal exit, 1 on a startup issue
+
 
 
 int main(int argc, char *argv[])
@@ -255,8 +317,8 @@ int main(int argc, char *argv[])
 
 	//this is usage for ports assigned to server to listen that are below 65535;
 	//however the iterated ports may go over 65535, so we need to make sure when
-	//its iterated that it doesnt go over and stays under that 65535, so for 5
-	//concurrent users technically we can only use upt to 65530 so it iterates up
+	//its iterated that it doesnt go over and stays under that 65535, so for 10
+	//concurrent users technically we can only use upt to 65525 so it iterates up
 	//to 65535 and doesn't tip over.
 	if (port + (MAX_PLAYERS - 1) > 65535) {
             fprintf(stderr, "Base port too high: need %d consecutive ports.\n", MAX_PLAYERS);
