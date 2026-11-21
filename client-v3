@@ -15,7 +15,9 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <sys/time.h>
+#include <sys/time.h>  //This library is included because when we were testing the client connection, we wanted 
+					   //a better understanding of why it wasnt connecting, so we gave a 5 seconds to connect to the server
+					   //if it didnt connect we would get a timeout connection.
 
 #include "wordleLib.h"
 
@@ -236,7 +238,7 @@ int connect_to_server(const char *hostname, int base_port)
       int count;
       char greeting[MAX_MESSAGE];
       struct sockaddr_in server = {0};
-      struct timeval timeout = {5, 0};
+      struct timeval timeout = {5, 0};  //this demostrates the 5 second timeout and the reason why we included sys/time.h
 
       if (port > 65535)
         break;
