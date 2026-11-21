@@ -26,7 +26,7 @@
 
 #include "wordleLib.h"
 //default port assigned below
-#define DEFAULT_PORT 44651 
+#define DEFAULT_PORT 44389 
 #define DEFAULT_WORD_FILE "words.txt"
 //The words list is 14,855 words long for the 5 letters A-Z
 #define MAX_WORDS 14855
