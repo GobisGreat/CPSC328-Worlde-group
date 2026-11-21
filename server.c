@@ -251,7 +251,7 @@ static int make_listener(int port)
 //Parameters: client_fd
 //return values: none
 
-static void handle_client(int client_fd)
+static void handle_client(int client_fd, int slot)
 {
   if (send_message(client_fd, MSG_HELLO) == -1)
      return;
@@ -405,7 +405,7 @@ int main(int argc, char *argv[])
 		   for (int j = 0; j < MAX_PLAYERS; j++)
 		        close_connection(listen_fd[j]);
 		   srand((unsigned)time(NULL) ^ (unsigned)getpid());
-		   handle_client(client_fd);
+		   handle_client(client_fd, i + 1);
 		   close_connection(client_fd);
                    printf("Client session ended.\n");
 		   exit(0);
