@@ -36,7 +36,7 @@ static int  bank_count = 0;
 
 
 //Function name: cmp_words
-//Description: This function compares the word that us guessed and the actual word that is given to the client.
+//Description: This functions purpose is to serve the functionality for the binary search, so that the bank can be alphabetically sorted for word_in_bank
 //Parameters: a pointer for first word being compared, then b pointer for secind word being compared.
 //return values: Returns negative number if a comes before b, 0 if the words are equal, and positive if a comes after b
 
@@ -341,10 +341,10 @@ int main(int argc, char *argv[])
 
         while (1) {
 	   pid_t done;
-	   while ((done = waitpid(-1, NULL, WNOHANG)) > 0)
-	        for (int i = 0; i < MAX_PLAYERS; i++)
-                     if (slot_pid[i] == done) {
-		         slot_pid[i] = 0;
+	   while ((done = waitpid(-1, NULL, WNOHANG)) > 0)  //The reason as to why WNOHANG is in here is because the 
+	        for (int i = 0; i < MAX_PLAYERS; i++)       //server needs to accept new clients, and if this wasn't included,
+                     if (slot_pid[i] == done) {         //the server would freeze until the child process finished.
+		         slot_pid[i] = 0;						//This is included in sys/wait.h and allows new connections of clients without stopping the server 
 			 printf("Slot %d (port %ld) is free again.\n", i + 1, port + i);
 		     }
 
