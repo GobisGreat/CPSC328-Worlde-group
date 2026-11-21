@@ -115,30 +115,6 @@ int receive_message(int socket_fd, char *buffer, int buffer_size){
 	} // end validate word
 
 
-	int word_in_bank(const char *word, char word_bank[][6], int word_count){
-		// im gonna use a binary search for this cuz the list is like 3 thousand or so long
-		int low = 0;
-		int high = word_count - 1;
-
-		while(low <= high){
-			int mid = (low + high) / 2;
-			int comparison = strcmp(word, word_bank[mid]); // 0 if its the word, less than 0 if its in low half > 0 if its high half
-
-			if (comparison == 0){
-				return 1; // word found 
-			}
-
-			else if (comparison < 0)
-			{
-				high = mid - 1; // search low
-			} // end elif
-			else {
-				low = mid + 1; // search high
-			}
-		
-	} // end while
-		return 0; // word not found
-	} // end word in bank
     void strip_newline(char *s)
     {
 	s[strcspn(s, "\r\n")] = '\0';

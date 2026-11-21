@@ -28,6 +28,6 @@ int  validate_word(const char *word);
 void normalize_word(char *word);
 int  command_type(const char *message);
 
-int  word_in_bank(const char *word, char word_bank[][WORD_BUF], int word_count);
+
 
 #endif
