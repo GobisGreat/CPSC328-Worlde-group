@@ -32,8 +32,7 @@ gcc server.c libwordle.a -o server
 gcc client.c libwordle.a -o client
 ```
 ## Running the server
-To run the server you have two options:
-you can either run the server with default options with. (It is generally a good idea to make sure you know either the server's IP address or hostname before beginning this process)
+To run the server you have two options, you can either run the server with default options. (It is generally a good idea to make sure you know either the server's IP address or hostname before beginning this process)
 ```
 ./server
 ```
