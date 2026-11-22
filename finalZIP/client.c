@@ -1,0 +1,500 @@
+/***********************************************************************/
+/*  Authors:        Ryan Doan CS, Hunter Phillips CS, Gabe Segaline IT */
+/*  Creation Date:  November 10, 2026                                  */
+/*  Due Date:       November 23, 2026                                  */
+/*  Course:         CPSC 328 010                                       */
+/*  Professor Name: Prof. Reiley Walther                               */
+/*  Assignment:     Wordle Group Project                               */
+/*  Filename:       client.c                                           */
+/*  Language:       C                                                  */
+/*  Purpose:        Implement the client for a multiplayer Wordle      */
+/*                  application. The client is responsible for game    */
+/*                  processing and the user interface, while the       */
+/*                  server holds the word bank.                        */
+/***********************************************************************/
+#include "wordleLib.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <netdb.h>
+
+#define SIZE sizeof(struct sockaddr_in)
+#define DEFAULT_PORT 44389 // modify port here if not using optional port argument (this is the default
+#define UNUSED 0
+#define ABSENT 1
+#define MISPLACED 2
+#define CORRECT 3
+
+/**********************************************************************/
+/*                                                                    */
+/*  Function name:  set_color                                         */
+/*  Description:    Prints an ANSI code to colors on board            */
+/*  Parameters:     feedback - G for green, Y for yellow,             */
+/*                  or another character for gray.                    */
+/*  Return Value:   None                                              */
+/*                                                                    */
+/**********************************************************************/
+// https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797
+void set_color(char feedback)
+{
+  if (feedback == 'G')
+    printf("\033[42;30m");       // green background, black text
+  else if (feedback == 'Y')
+    printf("\033[43;30m");       // yellow background, black text
+  else
+    printf("\033[100;97m");      // gray background, white text
+}
+
+/**********************************************************************/
+/*                                                                    */
+/*  Function name:  show_letter_bank                                  */
+/*  Description:    Prints one row of the colored letter bank.        */
+/*  Parameters:     letters - status of each letter from A to Z.      */
+/*                  row - letter bank row number  from 0 to 3.        */
+/*  Return Value:   None                                              */
+/*                                                                    */
+/**********************************************************************/
+void show_letter_bank(int letters[], int row)
+{
+  // alphabet positioning in letter bank
+  int first = row * 8;
+  int end = first + 8;
+  
+  if (end > 26)
+    end = 26;
+
+  for (int i = first; i < end; i++)
+    {
+      if (letters[i] == CORRECT)
+        set_color('G');
+      else if (letters[i] == MISPLACED)
+        set_color('Y');
+      else if (letters[i] == ABSENT)
+        set_color('X');
+      printf("[ %c ] ", 'A' + i);
+      
+      printf("\033[0m"); // return to normal terminal colors
+    }
+}
+
+/**********************************************************************/
+/*                                                                    */
+/*  Function name:  show_board                                        */
+/*  Description:    Prints the board, letter bank, and attempts.      */
+/*  Parameters:     guesses - words entered in this round.            */
+/*                  feedback - color results for each guess           */
+/*                  letters - status of each letter from A to Z       */
+/*                  attempts - number of valid guesses used           */
+/*  Return Value:   None                                              */
+/*                                                                    */
+/**********************************************************************/
+void show_board(char guesses[][WORD_BUF], char feedback[][WORD_BUF], int letters[], int attempts)
+{
+  // Print a fresh board below the previous one, keeping the game history.
+  printf("\nWordle Game - %d/%d attempts used, %d remaining\n", attempts, MAX_GUESSES, MAX_GUESSES - attempts);
+  
+  printf("Enter five letters, or 'quit' to exit.\n\n");
+  
+  printf("BOARD                             LETTER BANK\n");
+  
+  // this loop prints the Wordle board and the letterbank
+  for (int row = 0; row < MAX_GUESSES; row++)
+    {
+      for (int col = 0; col < WORD_LEN; col++)
+        {
+          if (row < attempts)
+            {
+              set_color(feedback[row][col]);
+              printf("[ %c ]", toupper((unsigned char)guesses[row][col]));
+              printf("\033[0m ");
+            }
+          else
+            printf("[   ] ");
+        }
+      printf("    ");
+      
+      if (row < 4)
+        show_letter_bank(letters, row);
+      printf("\n");
+    }
+}
+
+/**********************************************************************/
+/*                                                                    */
+/*  Function name:  update_letters                                    */
+/*  Description:    Updates the letter bank using from a guess.       */
+/*  Parameters:     letters - letter statuses to update.              */
+/*                  guess - the lowercase five-letter guess.          */
+/*                  feedback - G, Y, or X result for each letter.     */
+/*  Return Value:   None                                              */
+/*                                                                    */
+/**********************************************************************/
+void update_letters(int letters[], char guess[], char feedback[])
+{
+  for (int i = 0; i < WORD_LEN; i++)
+    {
+      // Ex. ("apple"): a=0, p=1, p=2, l=3, e=4.
+      // Convert the current character to its alphabet index (a=0, b=1, c=2, etc.). 
+      int letter = guess[i] - 'a';
+      int status;
+
+      // feedback has hierarchy
+      if (feedback[i] == 'G')
+        status = CORRECT;
+      else if (feedback[i] == 'Y')
+        status = MISPLACED;
+      else
+        status = ABSENT;
+
+      // in the case a repeated letter tries to overwrite something with higher hierarchy
+      if (letter >= 0 && letter < 26 && status > letters[letter])
+        letters[letter] = status;
+    }
+}
+
+/**********************************************************************/
+/*                                                                    */
+/*  Function name:  valid_feedback                                    */
+/*  Description:    Checks for five G, Y, or X characters.            */
+/*  Parameters:     feedback - result string from the server.         */
+/*  Return Value:   1 if valid, 0 if invalid.                         */
+/*                                                                    */
+/**********************************************************************/
+int valid_feedback(const char feedback[])
+{
+  if (strlen(feedback) != WORD_LEN)
+    return 0;
+  for (int i = 0; i < WORD_LEN; i++)
+    if (feedback[i] != 'G' && feedback[i] != 'Y' && feedback[i] != 'X')
+      return 0;
+  
+    return 1;
+}
+
+/**********************************************************************/
+/*                                                                    */
+/*  Function name:  play_wordle                                       */
+/*  Description:    Runs a round with up to six valid guesses.        */
+/*                  Sends guesses and displays server feedback        */
+/*  Parameters:     sockfd - connected server socket.                 */
+/*  Return Value:   1 for a win, 0 for a loss, or -1 for an error,    */
+/*                  or "quit" from user input                         */
+/*                                                                    */
+/**********************************************************************/
+int play_wordle(int sockfd)
+{
+  char input[MAX_MESSAGE];
+  char reply[MAX_MESSAGE];
+  char guess[WORD_BUF];
+  char message[WORD_LEN + 2]; // five letters + newline and string terminator
+  int count;
+  char guesses[MAX_GUESSES][WORD_BUF] = {0};
+  char feedback[MAX_GUESSES][WORD_BUF] = {0};
+  
+  int letters[26] = {0};
+  int attempts = 0;
+  show_board(guesses, feedback, letters, attempts);
+
+  while (attempts < MAX_GUESSES)
+    {
+      printf("Guess %d/%d: ", attempts + 1, MAX_GUESSES);
+      fflush(stdout); 
+
+      // quits if users input is invalid or blank
+      if (fgets(input, sizeof(input), stdin) == NULL)
+        {
+          send_message(sockfd, MSG_QUIT);
+          return -1;
+        }
+
+      // checks if input contains a newline and discards it
+      if (strchr(input, '\n') == NULL)
+        {
+          int c = getchar();
+          while (c != '\n' && c != EOF)
+            {
+              c = getchar();
+            }
+        }
+      strip_newline(input);
+
+      // convert uppercase input to lowercase
+      for (int i = 0; input[i] != '\0'; i++)
+        {
+          if (input[i] >= 'A' && input[i] <= 'Z')
+            input[i] = input[i] - 'A' + 'a';
+        }
+      // quits if users input is "quit"
+      if (strcmp(input, "quit") == 0)
+        {
+          send_message(sockfd, MSG_QUIT);
+          return -1;
+        }
+
+      if (validate_word(input) == 0)
+        {
+          printf("Enter exactly %d letters (a-z).\n", WORD_LEN);
+          continue;
+        }
+      
+      strcpy(guess, input);
+      strcpy(message, guess);
+      
+      message[WORD_LEN] = '\n'; // server reads until the newline
+      message[WORD_LEN + 1] = '\0';
+      
+      // sends and checks if error occurs from sending message to server
+      if (send_message(sockfd, message) == -1)
+        return -1;
+
+      count = receive_message(sockfd, reply, sizeof(reply));
+      if (count <= 0)
+        {
+          fprintf(stderr, "Server closed the connection.\n");
+          return -1;
+        }
+      
+        strip_newline(reply);
+
+      if (strcmp(reply, "INVALID") == 0)
+        {
+          printf("Not in the word list, try again!\n");
+         
+          continue; // doesn't use up an attempt
+        }
+
+      if (valid_feedback(reply) == 0)
+        {
+          fprintf(stderr, "Unexpected server reply: %s\n", reply);
+          return -1;
+        }
+
+      strcpy(guesses[attempts], guess);
+      strcpy(feedback[attempts], reply);
+      attempts++;
+      update_letters(letters, guess, reply);
+      show_board(guesses, feedback, letters, attempts);
+      
+      // if five letters return 1 and main displays win
+      if (strcmp(reply, "GGGGG") == 0)
+        return 1;
+    }
+
+  return 0;
+}
+
+/**********************************************************************/
+/*                                                                    */
+/*  Function name:  connect_to_server                                 */
+/*  Description:    Looks up the host and tries player ports          */
+/*                  until a server sends a HELLO greeting.            */
+/*  Parameters:     hostname - server hostname or IPv4 address.       */
+/*                  base_port - first server port to try.             */
+/*  Return Value:   Connected socket descriptor, or -1 on failure.    */
+/*                                                                    */
+/**********************************************************************/
+int connect_to_server(const char *hostname, int base_port)
+{
+  struct hostent *host = gethostbyname(hostname);
+  if (host == NULL)
+    {
+      fprintf(stderr, "Unable to find server: %s\n", hostname);
+      return -1;
+    }
+
+  for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+      int port = base_port + i;
+      int sockfd;
+      int count;
+      char greeting[MAX_MESSAGE];
+      struct sockaddr_in server = {0};
+
+      if (port > 65535) //exceeds max
+        break;
+
+      server.sin_family = AF_INET;
+      server.sin_port = htons(port);
+      memcpy(&server.sin_addr, host->h_addr_list[0], sizeof(server.sin_addr));
+
+      sockfd = socket(AF_INET, SOCK_STREAM, 0);
+      if (sockfd == -1)
+        {
+          perror("socket call failed");
+          return -1;
+        }
+
+      printf("Trying port %d...\n", port);
+      if (connect(sockfd, (struct sockaddr *)&server, SIZE) == -1)
+        {
+          perror("connect call failed");
+          close_connection(sockfd);
+          continue;
+        }
+
+      // wait for greeting from server
+      count = receive_message(sockfd, greeting, sizeof(greeting));
+      if (count <= 0)
+        {
+          printf("   port %d: no greeting\n", port);
+          close_connection(sockfd);
+          continue;
+        }
+
+      strip_newline(greeting);
+      if (strcmp(greeting, "BUSY") == 0)
+        {
+          printf("   port %d: busy, trying next\n", port);
+          close_connection(sockfd);
+          continue;
+        }
+
+      if (command_type(greeting) == CMD_HELLO)
+        {
+          printf("Connected on port %d\n", port);
+          return sockfd;
+        }
+
+      close_connection(sockfd);
+    }
+  return -1;
+}
+
+/**********************************************************************/
+/*                                                                    */
+/*  Function name:  main                                              */
+/*  Description:    Checks arguments, connects to the server,         */
+/*                  and handles starting, replaying, and exiting.     */
+/*  Parameters:     argc - number of command-line arguments.          */
+/*                  argv - program name, hostname, optional port.     */
+/*  Return Value:   1 for argument or connection errors;              */
+/*                  0 after the session ends.                         */
+/*                                                                    */
+/**********************************************************************/
+int main(int argc, char *argv[])
+{
+
+  int sockfd;
+  int port = DEFAULT_PORT;
+  char answer[32];
+
+  printf("Client machine started\n");
+  fflush(stdout);
+
+  // If the server disconnects let send_message report an error.
+  // Without this, writing to a closed socket can stop the entire client.
+  signal(SIGPIPE, SIG_IGN);
+
+  if (argc < 2 || argc > 3)
+    {
+      fprintf(stderr, "Usage: %s <hostname> [port]\n", argv[0]);
+      return 1;
+    }
+
+  if (argc == 3)
+    {
+      if (strlen(argv[2]) == 0 || strlen(argv[2]) > 5)
+        {
+          fprintf(stderr, "Port must be a number from 1024 to 65535.\n");
+          return 1;
+        }
+      
+      for (int i = 0; argv[2][i] != '\0'; i++)
+        {
+          if (argv[2][i] < '0' || argv[2][i] > '9')
+            {
+              fprintf(stderr, "Port must contain only digits.\n");
+              return 1;
+            }
+        }
+      port = atoi(argv[2]);
+      if (port < 1024 || port > 65535)
+        {
+          fprintf(stderr, "Port must be a number from 1024 to 65535.\n");
+          return 1;
+        }
+    }
+
+  sockfd = connect_to_server(argv[1], port);
+  if (sockfd < 0)
+     {
+       fprintf(stderr, "Could not connect to any server port (%d-%d).\n",
+	       port, port + MAX_PLAYERS - 1);
+       return 1;
+     }
+
+  // Game Start
+  printf("Wordle Game\n");
+  printf("Start?(y/N) ");
+  fflush(stdout);
+
+  if (fgets(answer, sizeof(answer), stdin) == NULL)
+    {
+      send_message(sockfd, MSG_QUIT);
+      
+      close_connection(sockfd);
+      return 0;
+    }
+
+  if (answer[0] == 'n' || answer[0] == 'N')
+    {
+      send_message(sockfd, MSG_QUIT);
+      
+      close_connection(sockfd);
+      printf("Connection closed.\n");
+      return 0;
+    }
+
+  if (answer[0] == 'y' || answer[0] == 'Y')
+    {
+      while (1)
+        {
+          if (send_message(sockfd, MSG_READY) == -1)
+            break;
+
+          int result = play_wordle(sockfd);
+          
+          if (result == 1)
+            printf("You won!\n");
+          else if (result == 0)
+            printf("Out of guesses. Better luck next time!\n");
+          else
+            break; // player typed quit or an error
+
+          // play again prompt
+          int again = 0;
+          while (1)
+            {
+              printf("Play again? (y/N) ");
+              fflush(stdout);
+              if (fgets(answer, sizeof(answer), stdin) == NULL)
+                break;
+              if (answer[0] == 'y' || answer[0] == 'Y')
+                {
+                  again = 1;
+                  break;
+                }
+              if (answer[0] == 'n' || answer[0] == 'N' || answer[0] == '\n')
+                break;
+              printf("Please enter y or n.\n");
+            }
+
+          if (again == 0)
+            {
+              send_message(sockfd, MSG_QUIT);
+              break;
+            }
+        }
+    }
+
+  
+  close_connection(sockfd);
+  printf("Connection closed.\n");
+  return 0;
+}
