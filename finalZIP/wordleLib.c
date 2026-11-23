@@ -24,13 +24,13 @@ these functions are used by both the server and client.      */
 
 /*************************************************************************/
 /*                                                                       */
-/* Function name: send_message 		                                                */
+/* Function name: send_message 		                                     */
 /* Description: Sends a message that is terminated with the \n operator
 through the conneced socket. Loops through until the entire message 
 is sent 														         */
-/* Parameters: int socket_fd - socket used to send message
-			   char *message - the message                                              			 */
-/* Return Value: int - total bytes sent or -1 if an error occurs													 */
+/* Parameters: int socket_fd - socket used to send messages				 */
+/*			   char *message - the message                               */
+/* Return Value: int - total bytes sent or -1 if an error occurs		 */
 /*                                                                       */
 /*************************************************************************/
 
@@ -66,10 +66,10 @@ int send_message(int socket_fd, const char *message){
 /*                                                                       */
 /* Function name: receive_message	                                     */
 /* Description: Receives messages one byte at a time until a \n character
-is read or the buffer is full.														 */
+is read or the buffer is full.											 */
 /* Parameters: int socket_fd - socket used to send message
 			   char *buffer - the array where the message is stored
-			   int buffer_size - max size of buffer.                                                 			 */
+			   int buffer_size - max size of buffer.                     */
 /* Return Value: int - number of bytes received or <= 0 if the connection 
 closes or there is an error.									       	 */
 /*************************************************************************/
@@ -107,7 +107,7 @@ int receive_message(int socket_fd, char *buffer, int buffer_size){
 /*************************************************************************/
 /*                                                                       */
 /* Function name: close_connection 		                                 */
-/* Description: closes the connection from either side													 */
+/* Description: closes the connection from either side					 */
 /* Parameters: int socket_fd - the socket the connection is on. 		 */
 /* Return Value: N/A													 */
 /*                                                                       */
@@ -140,10 +140,10 @@ int receive_message(int socket_fd, char *buffer, int buffer_size){
 
 /*************************************************************************/
 /*                                                                       */
-/* Function name: command_type		                                                */
+/* Function name: command_type		                                     */
 /* Description: deciphers which one of our decided protocol commands was 
 received 																 */
-/* Parameters: char *message - receieved protocol message                                            			 */
+/* Parameters: char *message - receieved protocol message                */
 /* Return Value: int - what type of command it was  					 */
 /*                                                                       */
 /*************************************************************************/
@@ -172,8 +172,8 @@ received 																 */
 /*                                                                       */
 /* Function name: validate_word	                                         */
 /* Description: Checks whether a word consists of 5 valid letters		 */
-/* Parameters: const char *word - the word                                             			 */
-/* Return Value: int - 1 if valid 0 if not													 */
+/* Parameters: const char *word - the word                               */
+/* Return Value: int - 1 if valid 0 if not								 */
 /*                                                                       */
 /*************************************************************************/	
 
@@ -198,7 +198,7 @@ received 																 */
 
 /*************************************************************************/
 /*                                                                       */
-/* Function name:strip_newline		                                                */
+/* Function name:strip_newline		                                     */
 /* Description: Removes the first newline chracter from a string		*/
 /* Parameters: char *s - the string to modify							 */
 /* Return Value: N/A													 */
