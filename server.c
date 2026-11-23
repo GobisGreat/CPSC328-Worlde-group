@@ -357,8 +357,8 @@ int main(int argc, char *argv[])
 	           maxfd = listen_fd[i];
 	   }
 
-           struct timeval tv = {1, 0};
-	   int ready = select(maxfd + 1, &rfds, NULL, NULL, &tv);
+           struct timeval tv = {1, 0};  //this timeval is for the select to wait 1 second before giving up and moving on
+	   int ready = select(maxfd + 1, &rfds, NULL, NULL, &tv);  //without this the slots could stay marked busy
            if (ready < 0) {
 	      if (errno == EINTR)
 		  continue;
@@ -367,7 +367,7 @@ int main(int argc, char *argv[])
 	   }
 
            for (int i = 0; i < MAX_PLAYERS; i++) {
-               if (!FD_ISSET(listen_fd[i], &rfds))
+               if (!FD_ISSET(listen_fd[i], &rfds)) //checks the specific slot the client is connecting to 
 		   continue;
 
 	       struct sockaddr_in client_addr;
@@ -392,7 +392,7 @@ int main(int argc, char *argv[])
 
 
 	       printf("Client %s connected on port %ld (slot %d)\n",
-		       inet_ntoa(client_addr.sin_addr), port + 1, i + 1);
+		       inet_ntoa(client_addr.sin_addr), port + 1, i + 1); 
 
 	       pid_t pid = fork();
 	       if (pid < 0) {
