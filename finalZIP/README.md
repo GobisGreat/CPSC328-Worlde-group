@@ -19,18 +19,23 @@ This project provides the user with everything they need to run a Wordle game in
 
 ## Compiling the program
 This project includes a makefile which will compile all included files you need for the program for you. Alongside compilation of both the server and client it will also create the static library for you.   
-To compile the entire project run
-`make`
+
+To compile the entire project run:   
+`make`     
+
 This creates
 - wordleLib.o
 - libwordle.a
 - client
-- server
-To remove all compiled files run:
-`make run`
+- server  
+
+To remove all compiled files run:  
+`make clean`
+  
 You can also compile each component individually using:
-`make client`
-and
+
+`make client`  
+  and  
 `make server`
 
 
@@ -87,7 +92,7 @@ Examples of our protocol messages:
 
 ## Known issues
 
-It's hard to identify exaclty how many 5 letter words there are in the english language, with that being the case we found the most plausible list from a GitHub from a user who seemed reputable. However it would be imposssible to verify the entire roughly 16,000 entry array that makes up our list. This means there may be some unreliable words inside our game. 
+It's hard to identify exaclty how many 5 letter words there are in the english language, with that being the case we found the most plausible list from a GitHub from a user who seemed reputable. However it would be imposssible to verify the entire roughly 15,000 entry array that makes up our list. This means there may be some unreliable words inside our game. 
 
 ## Teamwork
 
