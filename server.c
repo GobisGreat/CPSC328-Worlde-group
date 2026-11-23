@@ -275,7 +275,7 @@ static void handle_client(int client_fd, int slot)
 
 } //end handle client
 
-//function name:
+//function name: main
 //description: This function, main, starts the whole server and promotes a persistent connection
 //Parameters: argc, argv
 //return values: 0 on normal exit, 1 on a startup issue
