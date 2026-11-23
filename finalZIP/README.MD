@@ -15,6 +15,7 @@ This project provides the user with everything they need to run a Wordle game in
 - `wordleLib.c` - Shared library functions for client and server.
 - `wordleLib.h` - declerations for shared functions.
 - `valid-wordle-words.txt` - word bank used for game.
+- `MakeFile` - the make file used to compile
 
 ## Compiling the program
 ```bash
