@@ -69,7 +69,7 @@ We chose static libraries because the client and server can both use the common 
 
 ## Protocol 
 
-The client server communication protocol we chose was TCP. All messages are followed by a newline character that signals the end of our application level network messages in C. The 'receive_message()' function reads data until the newline character is read, allowing both the client and server to process these messages and when they are completely received.
+The client server communication protocol we made was TCP sockets with newline terminated messages. All messages are followed by a newline character that signals the end of our application level network messages in C. The 'receive_message()' function reads data until the newline character is read, allowing both the client and server to process these messages and when they are completely received.
 
 Examples of our protocol messages:
 
