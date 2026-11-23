@@ -1,3 +1,18 @@
+/************************************************************/
+/* Author: Hunter Phillips                                  */
+/* Major: Computer Science                                  */
+/* Creation Date: November 4th, 2026                        */
+/* Due Date: November 23rd, 2026                            */
+/* Course: CSC328 010                                       */
+/* Professor Name: Dr. Walther                              */
+/* Assignment: Wordle Group Project                         */
+/* Filename: wordleLib.h                                    */
+/* Purpose: This file contains the libraries shared 
+declarations, these functions are used by both the server 
+and client.    											    */                         
+/************************************************************/
+
+
 #ifndef WORDLELIB_H
 #define WORDLELIB_H
 
