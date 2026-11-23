@@ -18,20 +18,22 @@ This project provides the user with everything they need to run a Wordle game in
 - `MakeFile` - the make file used to compile
 
 ## Compiling the program
-```bash
-#compile your shared library into an object file
-gcc -c wordleLib.c 
+This project includes a makefile which will compile all included files you need for the program for you. Alongside compilation of both the server and client it will also create the static library for you.   
+To compile the entire project run
+`make`
+This creates
+- wordleLib.o
+- libwordle.a
+- client
+- server
+To remove all compiled files run:
+`make run`
+You can also compile each component individually using:
+`make client`
+and
+`make server`
 
-#create the static library from the object
-ar rc libwordle.a wordleLib.o
 
-#compile server
-
-gcc server.c libwordle.a -o server
-
-#compile client
-gcc client.c libwordle.a -o client
-```
 ## Running the server
 To run the server you have two options:
 you can either run the server with default options with.
